@@ -1,8 +1,7 @@
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 
-// Abstract Room class
+// Abstract Room
 abstract class Room {
 
     private String roomType;
@@ -18,16 +17,10 @@ abstract class Room {
     public String getRoomType() {
         return roomType;
     }
-
-    public void displayRoomDetails() {
-        System.out.println("Room Type: " + roomType);
-        System.out.println("Beds: " + beds);
-        System.out.println("Price per night: ₹" + price);
-    }
 }
 
 
-// Concrete room classes
+// Room Types
 class SingleRoom extends Room {
     public SingleRoom() {
         super("Single Room", 1, 2000);
@@ -47,49 +40,121 @@ class SuiteRoom extends Room {
 }
 
 
-// Inventory Class
+// Inventory Service
 class RoomInventory {
 
     private HashMap<String, Integer> inventory;
 
     public RoomInventory() {
         inventory = new HashMap<>();
-
-        inventory.put("Single Room", 5);
-        inventory.put("Double Room", 3);
-        inventory.put("Suite Room", 0); // Example unavailable room
+        inventory.put("Single Room", 2);
+        inventory.put("Double Room", 2);
+        inventory.put("Suite Room", 1);
     }
 
     public int getAvailability(String roomType) {
         return inventory.getOrDefault(roomType, 0);
     }
 
+    public void decreaseAvailability(String roomType) {
+        inventory.put(roomType, inventory.get(roomType) - 1);
+    }
+
     public void displayInventory() {
-        System.out.println("\nCurrent Inventory:");
-        for (Map.Entry<String, Integer> entry : inventory.entrySet()) {
-            System.out.println(entry.getKey() + " : " + entry.getValue());
-        }
+        System.out.println("\nCurrent Inventory: " + inventory);
     }
 }
 
 
-// Search Service (Read-only)
-class RoomSearchService {
+// Reservation Request
+class Reservation {
 
-    public void searchAvailableRooms(Room[] rooms, RoomInventory inventory) {
+    private String guestName;
+    private String roomType;
 
-        System.out.println("\n===== Available Rooms =====");
+    public Reservation(String guestName, String roomType) {
+        this.guestName = guestName;
+        this.roomType = roomType;
+    }
 
-        for (Room room : rooms) {
+    public String getGuestName() {
+        return guestName;
+    }
 
-            int available = inventory.getAvailability(room.getRoomType());
+    public String getRoomType() {
+        return roomType;
+    }
+}
 
-            // Defensive check
+
+// Booking Queue
+class BookingRequestQueue {
+
+    private Queue<Reservation> queue = new LinkedList<>();
+
+    public void addRequest(Reservation r) {
+        queue.add(r);
+    }
+
+    public Reservation getNextRequest() {
+        return queue.poll(); // FIFO
+    }
+
+    public boolean hasRequests() {
+        return !queue.isEmpty();
+    }
+}
+
+
+// Booking Service (Allocation)
+class BookingService {
+
+    private HashMap<String, Set<String>> allocatedRooms = new HashMap<>();
+    private int roomCounter = 1;
+
+    public void processRequests(BookingRequestQueue queue, RoomInventory inventory) {
+
+        System.out.println("\n===== Processing Booking Requests =====");
+
+        while (queue.hasRequests()) {
+
+            Reservation request = queue.getNextRequest();
+            String roomType = request.getRoomType();
+
+            int available = inventory.getAvailability(roomType);
+
             if (available > 0) {
-                room.displayRoomDetails();
-                System.out.println("Available Rooms: " + available);
-                System.out.println();
+
+                // Generate unique room ID
+                String roomId = roomType.replace(" ", "") + "-" + roomCounter++;
+
+                // Get or create set for room type
+                allocatedRooms.putIfAbsent(roomType, new HashSet<>());
+
+                // Ensure uniqueness
+                allocatedRooms.get(roomType).add(roomId);
+
+                // Update inventory
+                inventory.decreaseAvailability(roomType);
+
+                System.out.println("Reservation confirmed for "
+                        + request.getGuestName()
+                        + " → Room ID: " + roomId);
+
+            } else {
+                System.out.println("Reservation failed for "
+                        + request.getGuestName()
+                        + " (No rooms available)");
             }
+        }
+    }
+
+    public void displayAllocations() {
+
+        System.out.println("\n===== Allocated Rooms =====");
+
+        for (Map.Entry<String, Set<String>> entry : allocatedRooms.entrySet()) {
+            System.out.println(entry.getKey() + " → " + entry.getValue());
         }
     }
 }
@@ -100,24 +165,23 @@ public class BookMyStayApp {
 
     public static void main(String[] args) {
 
-        System.out.println("===== BookMyStay Room Search =====");
+        System.out.println("===== BookMyStay Reservation System =====");
 
-        // Room domain objects
-        Room single = new SingleRoom();
-        Room doubleRoom = new DoubleRoom();
-        Room suite = new SuiteRoom();
-
-        Room[] rooms = {single, doubleRoom, suite};
-
-        // Inventory
         RoomInventory inventory = new RoomInventory();
+        BookingRequestQueue queue = new BookingRequestQueue();
 
-        // Search service
-        RoomSearchService searchService = new RoomSearchService();
+        // Booking Requests
+        queue.addRequest(new Reservation("Arjun", "Single Room"));
+        queue.addRequest(new Reservation("Priya", "Double Room"));
+        queue.addRequest(new Reservation("Rahul", "Suite Room"));
+        queue.addRequest(new Reservation("Meena", "Suite Room")); // may fail
 
-        // Guest searches available rooms
-        searchService.searchAvailableRooms(rooms, inventory);
+        // Booking Service
+        BookingService service = new BookingService();
 
-        System.out.println("\nSearch completed. Inventory unchanged.");
+        service.processRequests(queue, inventory);
+        service.displayAllocations();
+
+        inventory.displayInventory();
     }
 }
